@@ -40,11 +40,12 @@ public class CartList {
             return temp;
         }
         CartNode current=head;
-        while(current!=null){
+        while(current.next!=null){
             if(current.next.product.getId()==productId){
+                CartNode temp=current.next;
                 current.next=current.next.next;
                 size--;
-                return current;
+                return temp;
             }
             current=current.next;
         }
@@ -81,6 +82,7 @@ public class CartList {
         while(current!=null){
             System.out.println("Product: "+current.product.getId()+"("+current.product.getName()+")");
             System.out.println("Quantity: "+current.quantity);
+            System.out.printf("Unit Price: RM%.2f", current.product.getPrice());
             double subtotals=(current.product.getPrice())*(double)(current.quantity);
             System.out.printf("Product subtotals: RM%.2f%n", subtotals);
             current=current.next;
@@ -102,30 +104,27 @@ public class CartList {
         size=0;
     }
 
-    public Product undo(){
+    public CartNode undo(){
         if(head==null){
             System.out.println("Cart is empty, nothing to remove");
             return null;
         }
         //LIFO
-        Product removed;
-        int removedQty;
+        CartNode removedNode;
         if(head.next==null){
-            removed=head.product;
-            removedQty=head.quantity;
+            removedNode=head;
             head=null;
         }else{
             CartNode current=head;
             while(current.next.next!=null){
                 current=current.next;
             }
-            removed=current.next.product;
-            removedQty=current.next.quantity;
+            removedNode=current.next;
             current.next=null;
         }
-        System.out.println("Removed product: "+removed.getName()+", Quantity: "+removedQty);
+        System.out.println("Removed product: "+removedNode.product.getName()+", Quantity: "+removedNode.quantity);
         size--;
-        return removed;
+        return removedNode;
     }
 
     public int getSize(){
@@ -134,6 +133,10 @@ public class CartList {
 
     public boolean isEmpty(){
         return getSize()==0;
+    }
+
+    public CartNode gethead(){
+        return this.head;
     }
 
 }
