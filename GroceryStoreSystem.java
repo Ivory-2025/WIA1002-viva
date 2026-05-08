@@ -1,12 +1,13 @@
 import InventoryManagement.*;
 import ShoppingCart.*;
 import java.util.*;
+import ShoppingCart.CartNode;
 public class GroceryStoreSystem {
-    private static CartList cart=new CartList();
+    static CartList cart=new CartList();
+    static Scanner sc=new Scanner(System.in);
+    static InventoryManager inventory=new InventoryManager();
+    static UndoStack undoStack = new UndoStack();
     public static void main(String[] args) {
-        Scanner sc=new Scanner(System.in);
-        InventoryManager inventory=new InventoryManager();
-        UndoStack undoStack = new UndoStack();
 
         try{
             inventory.loadFromFile("inventory.txt");
@@ -173,24 +174,28 @@ public class GroceryStoreSystem {
                         if(choice==1){
                             int [] action = undoStack.pop();
                             if(action != null){
-                                cart.removeItem(action[0]);
-                                if (action != null) {
-                                    cart.removeItem(action[0]);
-                                    Product prod = inventory.getProductById(action[0]);
-                                    if (prod != null) {
-                                        inventory.updateStock(action[0], prod.getStock() + action[1]);
-                                    }
-                                }
-                            }
+                                    int pid = action[0];
+                                    int qty = action[1];
+                                    CartNode item = cart.findItem(pid);
+            if (item != null) {
+                // Restore the stock to the inventory 
+                Product p = inventory.getProductById(pid);
+                p.setStock(p.getStock() + qty);
+                
+                // If undoing a partial quantity (from an update), subtract it. 
+                // Otherwise, remove the item entirely.
+                if (item.quantity > qty) {
+                    item.quantity -= qty;
+                } else {
+                    cart.removeItem(pid);
+                }
+                System.out.println("Last addition undone successfully.");
+            }
+        } else {
+            System.out.println("Undo stack is empty.");
+        }
                         }else if(choice==2){
-                            CartNode current = cart.gethead();
-                            while(current != null){
-                                inventory.updateStock(current.product.getId(), current.product.getStock() + current.quantity);
-                                current = current.next;
-                            }
-                            cart.clear();
-                            undoStack.clear();
-                            System.out.println("Cart cleared successfully");
+                            clearCart();
                         }
                         break;
                     case 11:
@@ -201,7 +206,7 @@ public class GroceryStoreSystem {
                            System.out.println("\n--- Receipt ---");
                            cart.displayCart();
                            System.out.printf("TOTAL: RM%.2f\n", cart.calculateTotal());
-                           clearAndRestoreStock();
+                           cart.clear();
                            undoStack.clear();
                            System.out.print("Save inventory? (y/n): ");
                            if (sc.nextLine().equalsIgnoreCase("y")){ 
@@ -230,12 +235,14 @@ public class GroceryStoreSystem {
         }
     }
 
-    public static void clearAndRestoreStock(){
-            CartNode current=cart.gethead();
-            while(current!=null){
-                current.product.setStock(current.product.getStock()+current.quantity);
-                current=current.next;
+        public static void clearCart(){
+            CartNode current = cart.getHead();
+            while(current != null){
+                inventory.updateStock(current.product.getId(), current.product.getStock() + current.quantity);
+                current = current.next;
             }
             cart.clear();
+            undoStack.clear();
+            System.out.println("Cart cleared successfully");
+        }
     }
-}

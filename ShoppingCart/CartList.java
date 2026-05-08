@@ -135,8 +135,8 @@ public class CartList {
         return getSize()==0;
     }
 
-    public CartNode gethead(){
-        return this.head;
+    public CartNode getHead(){
+        return head;
     }
 
 }
