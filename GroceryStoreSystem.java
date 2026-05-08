@@ -2,10 +2,11 @@ import InventoryManagement.*;
 import ShoppingCart.*;
 import java.util.*;
 public class GroceryStoreSystem {
+    static CartList cart=new CartList();
+    static Scanner sc=new Scanner(System.in);
+    static InventoryManager inventory=new InventoryManager();
+    static UndoStack undoStack = new UndoStack();
     public static void main(String[] args) {
-        Scanner sc=new Scanner(System.in);
-        InventoryManager inventory=new InventoryManager();
-        CartList cart=new CartList();
 
         try{
             inventory.loadFromFile("inventory.txt");
@@ -85,6 +86,8 @@ public class GroceryStoreSystem {
                         int removedId=sc.nextInt();
                         sc.nextLine();
                         inventory.removeProduct(removedId);
+                        cart.removeItem(removedId); 
+                        System.out.println("Product removed from inventory and all active carts.");
                         break;
                     case 5:
                         System.out.println("Enter product id to update its stock: ");
@@ -109,6 +112,7 @@ public class GroceryStoreSystem {
                         }else{
                             pCart.setStock(pCart.getStock()-proQty);
                             cart.addItem(pCart,proQty);
+                            undoStack.push(proId, proQty);
                             System.out.println("Item added successfully.");
                         }
                         break;
@@ -120,6 +124,7 @@ public class GroceryStoreSystem {
                         if(productToRemove!=null){
                             productToRemove.product.setStock(productToRemove.product.getStock()+productToRemove.quantity);
                             cart.removeItem(remId);
+                            undoStack.push(remId, -productToRemove.quantity);
                         }else{
                             System.out.println("Product not found in cart");
                         }
@@ -129,30 +134,89 @@ public class GroceryStoreSystem {
                         cart.displayCart();
                         break;
                     case 9:
-                        System.out.println("Enter product id to update quantity: ");
-                        int updateId=sc.nextInt();
-                        sc.nextLine();
-                        if(cart.findItem(updateId)!=null){
-                            System.out.println("Enter new quantity: ");
-                            int newQty=sc.nextInt();
-                            cart.updateQuantity(updateId, newQty);
-                            System.out.println("Quantity updated successfully");
-                        }else{
-                            System.out.println("Product not found in cart");
-                       }
-                        break;
+    System.out.print("Enter product id to update quantity: ");
+    int updateId = sc.nextInt();
+    sc.nextLine(); 
+    CartNode itemToUpdate = cart.findItem(updateId);
+
+    if (itemToUpdate != null) {
+        System.out.print("Enter new quantity: ");
+        int newQty = sc.nextInt();
+        sc.nextLine();
+
+        if (newQty <= 0) {
+            System.out.println("Quantity must be at least 1. Use 'Remove' to delete items.");
+        } else {
+            int oldQty = itemToUpdate.quantity;
+            int diff = newQty - oldQty; // Positive if increasing, negative if decreasing
+
+            if (diff > 0) {
+                // Scenario: Increasing quantity - Check if store has enough stock 
+                if (inventory.isAvailable(updateId, diff)) { 
+                    itemToUpdate.product.setStock(itemToUpdate.product.getStock() - diff); 
+                    cart.updateQuantity(updateId, newQty, undoStack); 
+                    System.out.println("Quantity increased and synced with undo history.");
+                } else {
+                    System.out.println("Error: Insufficient stock. Available: " + itemToUpdate.product.getStock());
+                }
+            } else if (diff < 0) {
+                // Scenario: Decreasing quantity - Restore stock to inventory [cite: 19]
+                // We use Math.abs(diff) because diff is negative here (e.g., -2)
+                itemToUpdate.product.setStock(itemToUpdate.product.getStock() + Math.abs(diff));
+                cart.updateQuantity(updateId, newQty, undoStack);
+                System.out.println("Quantity decreased and synced with undo history.");
+            } else {
+                System.out.println("Quantity is unchanged.");
+            }
+        }
+    } else {
+        System.out.println("Product not found in cart.");
+    }
+    break;
                     case 10:
                         System.out.println("Undo Last Addition(1) or Clear Cart (2): ");
                         int choice=sc.nextInt();
                         sc.nextLine();
                         if(choice==1){
-                        Product removedProduct=cart.undo();
-                        if(removedProduct!=null){
-                            inventory.updateStock(removedProduct.getId(), removedProduct.getStock());
-                        }
+                            int [] action = undoStack.pop();
+                            if(action != null){
+                                    int pid = action[0];
+                                    int qty = action[1];
+                                    CartNode item = cart.findItem(pid);
+            if (item != null) {
+                Product p = inventory.getProductById(pid);
+                
+                if (qty > 0) {
+                    // This was an ADD operation - qty is what was added
+                    // Subtract the added quantity from current quantity
+                    int newQuantity = item.quantity - qty;
+                    
+                    if (newQuantity > 0) {
+                        // Keep the old quantity in cart
+                        item.quantity = newQuantity;
+                        p.setStock(p.getStock() + qty);
+                        System.out.println("Addition undone successfully. Quantity restored to " + newQuantity);
+                    } else {
+                        // No items left, remove from cart
+                        p.setStock(p.getStock() + item.quantity);
+                        cart.removeItem(pid);
+                        System.out.println("Addition undone successfully.");
+                    }
+                } else {
+                    // This was an UPDATE operation - qty is the difference
+                    // Reverse the update
+                    item.quantity -= qty;  // qty is negative, so this adds back
+                    p.setStock(p.getStock() + qty);  // qty is negative, so this reverses stock change
+                    System.out.println("Update undone successfully.");
+                }
+            } else {
+                System.out.println("Error: Product not found in cart (may have been already removed).");
+            }
+        } else {
+            System.out.println("Undo stack is empty.");
+        }
                         }else if(choice==2){
-                            cart.clear();
-                            System.out.println("Cart cleared successfully");
+                            clearCart();
                         }
                         break;
                     case 11:
@@ -164,6 +228,7 @@ public class GroceryStoreSystem {
                            cart.displayCart();
                            System.out.printf("TOTAL: RM%.2f\n", cart.calculateTotal());
                            cart.clear();
+                           undoStack.clear();
                            System.out.print("Save inventory? (y/n): ");
                            if (sc.nextLine().equalsIgnoreCase("y")){ 
                                 inventory.saveToFile("inventory.txt");
@@ -177,7 +242,8 @@ public class GroceryStoreSystem {
                         sc.close();
                         return;
                     default:
-                        System.out.println("Invalid choice, please try again.");
+
+                    System.out.println("Invalid choice, please try again.");
                     }   
             }catch(NumberFormatException e){
                 System.out.println("Invalid input format! Please enter numeric values where required.");
@@ -189,4 +255,15 @@ public class GroceryStoreSystem {
             }
         }
     }
-}
+
+        public static void clearCart(){
+            CartNode current = cart.getHead();
+            while(current != null){
+                inventory.updateStock(current.product.getId(), current.product.getStock() + current.quantity);
+                current = current.next;
+            }
+            cart.clear();
+            undoStack.clear();
+            System.out.println("Cart cleared successfully");
+        }
+    }

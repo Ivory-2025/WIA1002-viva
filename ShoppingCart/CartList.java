@@ -1,5 +1,6 @@
 package ShoppingCart;
 
+import InventoryManagement.InventoryManager;
 import InventoryManagement.Product;
 public class CartList {
     private CartNode head;
@@ -40,26 +41,40 @@ public class CartList {
             return temp;
         }
         CartNode current=head;
-        while(current!=null){
+        while(current.next!=null){
             if(current.next.product.getId()==productId){
-                current.next=current.next.next;
+                CartNode temp = current.next;
+                current.next = current.next.next; // Bypass the node to remove
                 size--;
-                return current;
+                return temp;
             }
             current=current.next;
         }
         return null;
     }
 
-    public void updateQuantity(int productId, int newQty){
-        CartNode current=head;
-        while(current!=null){
-            if(current.product.getId()==productId){
-                current.quantity=newQty;
-            }
-            current=current.next;
+    // Update in CartList.java
+public void updateQuantity(int productId, int newQty, UndoStack stack) {
+    CartNode current = head;
+    while (current != null) {
+        if (current.product.getId() == productId) {
+            // 1. Store the original quantity for undo
+            int oldQty = current.quantity;
+
+            // 2. Update the current quantity
+            current.quantity = newQty;
+
+            // 3. Push to undo stack 
+            // For updates: push the DIFFERENCE added
+            // Positive if increasing, negative if decreasing
+            int diff = newQty - oldQty;
+            stack.push(productId, diff); 
+            
+            return; // Exit once found and updated
         }
+        current = current.next;
     }
+}
 
     public CartNode findItem(int productId){
         CartNode current=head;
@@ -81,6 +96,7 @@ public class CartList {
         while(current!=null){
             System.out.println("Product: "+current.product.getId()+"("+current.product.getName()+")");
             System.out.println("Quantity: "+current.quantity);
+            System.out.printf("Unit Price: RM%.2f%n", current.product.getPrice());
             double subtotals=(current.product.getPrice())*(double)(current.quantity);
             System.out.printf("Product subtotals: RM%.2f%n", subtotals);
             current=current.next;
@@ -102,30 +118,27 @@ public class CartList {
         size=0;
     }
 
-    public Product undo(){
+    public CartNode undo(){
         if(head==null){
             System.out.println("Cart is empty, nothing to remove");
             return null;
         }
         //LIFO
-        Product removed;
-        int removedQty;
+        CartNode removedNode;
         if(head.next==null){
-            removed=head.product;
-            removedQty=head.quantity;
+            removedNode=head;
             head=null;
         }else{
             CartNode current=head;
             while(current.next.next!=null){
                 current=current.next;
             }
-            removed=current.next.product;
-            removedQty=current.next.quantity;
+            removedNode=current.next;
             current.next=null;
         }
-        System.out.println("Removed product: "+removed.getName()+", Quantity: "+removedQty);
+        System.out.println("Removed product: "+removedNode.product.getName()+", Quantity: "+removedNode.quantity);
         size--;
-        return removed;
+        return removedNode;
     }
 
     public int getSize(){
@@ -134,6 +147,10 @@ public class CartList {
 
     public boolean isEmpty(){
         return getSize()==0;
+    }
+
+    public CartNode getHead(){
+        return head;
     }
 
 }
